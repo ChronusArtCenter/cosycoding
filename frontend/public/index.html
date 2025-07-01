@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Glitch Clone</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+</head>
+<body>
+  <textarea id="editor"></textarea>
+  <button id="save">Save</button>
+
+  <script>
+    const editor = CodeMirror.fromTextArea(
+      document.getElementById("editor"),
+      { lineNumbers: true, mode: "javascript" }
+    );
+
+    // Connect to WebSocket
+    const ws = new WebSocket("ws://localhost:3000");
+    ws.onmessage = (e) => editor.setValue(e.data);
+
+    // Save button
+    document.getElementById("save").addEventListener("click", async () => {
+      const response = await fetch("/project", {
+        method: "POST",
+        body: JSON.stringify({ code: editor.getValue() }),
+      });
+      const { id } = await response.json();
+      alert(`Project saved! Share URL: /?id=${id}`);
+    });
+  </script>
+</body>
+</html>

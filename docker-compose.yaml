@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Node.js Backend
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=glitch
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: glitch
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis for WebSockets
+  redis:
+    image: redis:6
+    restart: unless-stopped
+
+  # Frontend (Static files)
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/public:/usr/share/nginx/html
+
+  # Cron job to delete old projects
+  cleanup:
+    build: ./backend
+    command: node cleanup.js
+    restart: on-failure
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
