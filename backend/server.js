@@ -1,23 +1,16 @@
 const express = require('express');
-const { Pool } = require('pg');
 const WebSocket = require('ws');
-const redis = require('redis');
+const { pool, initDB } = require('./db');
 
 const app = express();
-const server = app.listen(3000);
-const wss = new WebSocket.Server({ server });
+app.use(express.json()); // Parse JSON bodies
 
-// PostgreSQL setup
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: 5432,
+const server = app.listen(3000, async () => {
+  await initDB(); // Initialize DB on startup
+  console.log("Server running on http://localhost:3000");
 });
 
-// Redis for WebSocket sessions
-const redisClient = redis.createClient(process.env.REDIS_URL);
+const wss = new WebSocket.Server({ server });
 
 // Create a new project
 app.post('/project', async (req, res) => {
@@ -36,7 +29,7 @@ app.post('/project', async (req, res) => {
 // WebSocket for real-time editing
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
-    // Broadcast changes to all clients in the same project
+    // Broadcast changes to all clients
     wss.clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(message);
