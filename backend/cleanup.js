@@ -1,11 +1,16 @@
-const { Pool } = require('pg');
-const pool = new Pool({ /* same as server.js */ });
+const { pool } = require('./db');
 
 async function cleanup() {
-  await pool.query(
-    'DELETE FROM projects WHERE expires_at < NOW()'
-  );
-  console.log('Cleaned up old projects');
+  try {
+    const result = await pool.query(
+      'DELETE FROM projects WHERE expires_at < NOW() RETURNING id'
+    );
+    console.log(`Cleaned up ${result.rowCount} expired projects`);
+  } catch (err) {
+    console.error('Cleanup failed:', err);
+  } finally {
+    process.exit(0);
+  }
 }
 
-cleanup().then(() => process.exit(0));
+cleanup();

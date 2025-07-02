@@ -1,33 +1,589 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Glitch Clone</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <title>CosyCoder</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/idea.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Victor+Mono:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
+  <style>
+     body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden; /* Prevent double scrollbars */
+    }
+    
+    .victor-mono-editor {
+      font-family: "Victor Mono", monospace;
+      font-optical-sizing: auto;
+      font-weight: 300;
+      font-style: normal;
+    }
+    #container {
+      display: flex;
+      height: 100vh;
+    }
+    #editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s ease;
+    }
+    #editor {
+      height: 100%;
+    }
+    #preview-container {
+      flex: 1;
+      border-left: 1px solid #ccc;
+      position: relative;
+      transition: flex 0.3s ease;
+      overflow: hidden;
+    }
+    #preview {
+      height: 100%;
+      width: 100%;
+      border: none;
+    }
+    #view-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 100;
+      padding: 5px 10px;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    /* View states */
+    .code-only #preview-container {
+      flex: 0 0 0;
+      border-left: none;
+    }
+    .preview-only #editor-container {
+       display:none;
+    }
+    .preview-only #preview-container {
+      border-left: none;
+    }
+    #save-status {
+      font-style: italic;
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 100;
+    }
+    #file-upload {
+      display: none;
+    }
+    .upload-btn {
+      padding: 5px 10px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 100;
+    }
+    .upload-btn:hover {
+      background: #45a049;
+    }
+    #upload-status {
+      margin-left: 10px;
+      color: #666;
+      font-style: italic;
+      display: none;
+    }
+    .CodeMirror {
+      height: 100%;
+      font-family: 'Victor Mono', 'Courier New', monospace;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .remote-cursor {
+  position: absolute;
+  border-left: 2px solid;
+  height: 1em;
+  white-space: nowrap;
+  /* Add subtle animation for smooth movement */
+  transition: transform 0.1s ease;
+}
+
+.cursor-label {
+  position: relative;
+  top: -1.5em;
+  font-size: 0.8em;
+  padding: 2px 6px;
+  background: inherit;
+  color: white;
+  /* Rounded edges */
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Semi-transparent background */
+  background-color: rgba(0, 0, 0, 0.6);
+  /* Text shadow for better readability */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  /* Smooth transitions */
+  transition: all 0.2s ease;
+  /* Prevent text selection */
+  user-select: none;
+  /* Add some depth */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  /* Make the label slightly wider */
+  min-width: 20px;
+  text-align: center;
+  /* Add a small pointer triangle */
+  &:after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Optional: Add a subtle pulse animation to make cursors more noticeable */
+@keyframes cursorPulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+.remote-cursor:hover .cursor-label {
+  /* Enhance on hover */
+  background-color: rgba(0, 0, 0, 0.8);
+  transform: scale(1.05);
+}
+/* Make sure CodeMirror lines are positioned relative */
+.CodeMirror-line {
+  position: relative;
+}
+@media (max-width: 768px) {
+  .remote-cursor {
+    height: 1.5em; /* Larger cursor for touch devices */
+  }
+}
+  </style>
 </head>
 <body>
-  <textarea id="editor"></textarea>
-  <button id="save">Save</button>
+  <div id="app">
+    <div id="toolbar">
+      <span id="save-status">Ready</span>
+      <label for="file-upload" class="upload-btn">
+        Upload Assets
+      </label>
+      <input type="file" id="file-upload" accept="image/*,.css,.js">
+      <span id="upload-status"></span>
+      <button id="view-toggle">Hide Preview</button>
+    </div>
+    <div id="container">
+      <div id="editor-container">
+        <textarea id="editor"></textarea>
+      </div>
+      <div id="preview-container">
+        <iframe id="preview"></iframe>
+      </div>
+    </div>
+  </div>
 
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+  <!-- Language modes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+  <!-- Addons -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closetag.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/html-hint.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
   <script>
-    const editor = CodeMirror.fromTextArea(
-      document.getElementById("editor"),
-      { lineNumbers: true, mode: "javascript" }
-    );
+          let remoteCursorsContainer;
 
-    // Connect to WebSocket
-    const ws = new WebSocket("ws://localhost:3000");
-    ws.onmessage = (e) => editor.setValue(e.data);
-
-    // Save button
-    document.getElementById("save").addEventListener("click", async () => {
-      const response = await fetch("/project", {
-        method: "POST",
-        body: JSON.stringify({ code: editor.getValue() }),
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize editor with enhanced syntax highlighting
+      const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+        mode: 'htmlmixed',
+        theme: 'idea',
+        lineNumbers: true,
+        tabSize: 2,
+        indentUnit: 2,
+        highlightActiveLine: true, 
+        lineWrapping: true,
+        autoCloseTags: true,
+        autoCloseBrackets: true,
+        cursorScrollMargin: 10,
+        extraKeys: {
+          "Ctrl-Space": "autocomplete",
+          "'>'": function(cm) {
+            cm.closeTag(cm, '>');
+          }
+        },
+        gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+        foldGutter: true,
+        highlightSelectionMatches: {showToken: /\w/}
       });
-      const { id } = await response.json();
-      alert(`Project saved! Share URL: /?id=${id}`);
+    
+       // Initialize cursor container immediately after editor creation
+      remoteCursorsContainer = document.createElement('div');
+      remoteCursorsContainer.className = 'remote-cursors';
+      editor.getWrapperElement().appendChild(remoteCursorsContainer);
+
+      // WebSocket and state variables
+      let socket;
+      let clientId;
+      let currentProjectId = new URLSearchParams(window.location.search).get('id');
+      let ignoreRemoteChanges = false;
+      let remoteCursors = {};
+      let viewState = 0;
+      let saveTimeout;
+      const DEBOUNCE_TIME = 2000; // 2 seconds
+    
+      // DOM elements
+      const container = document.getElementById('container');
+      const toggleBtn = document.getElementById('view-toggle');
+      const preview = document.getElementById('preview');
+      const fileUpload = document.getElementById('file-upload');
+      const uploadStatus = document.getElementById('upload-status');
+      const saveStatus = document.getElementById('save-status');
+
+    
+      // Initialize WebSocket connection
+      function connectWebSocket() {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        socket = new WebSocket(`${wsProtocol}${window.location.host}`);
+    
+        socket.onopen = () => {
+          console.log('WebSocket connected');
+          if (currentProjectId) {
+            socket.send(JSON.stringify({
+              type: 'join',
+              projectId: currentProjectId
+            }));
+          }
+        };
+    
+        socket.onmessage = (event) => {
+          //console.log('WebSocket message received:', event.data); // todo debug remove
+          const message = JSON.parse(event.data);
+          
+          switch (message.type) {
+            case 'init':
+              clientId = message.clientId;
+              break;
+            case 'update':
+              applyRemoteChanges(message.changes);
+              break;
+            case 'cursor':
+              if (message.clientId !== clientId) {
+                updateRemoteCursor(message.clientId, message.cursorPos);
+              }
+              break;
+            case 'user-left':
+              removeCursorIndicator(message.clientId);
+              break;
+          }
+        };
+    
+        socket.onclose = () => {
+          console.log('WebSocket disconnected, reconnecting...');
+          setTimeout(connectWebSocket, 1000);
+        };
+      }
+    
+      // Initialize cursor container after editor is ready
+      // setTimeout(() => {
+      //   const cmWrapper = document.querySelector('.CodeMirror');
+      //   if (!cmWrapper) {
+      //     console.error('CodeMirror wrapper not found!');
+      //     return;
+      //   }
+    
+      //   const remoteCursorsContainer = document.createElement('div');
+      //   remoteCursorsContainer.className = 'remote-cursors';
+      //   cmWrapper.appendChild(remoteCursorsContainer);
+      // }, 100);
+    
+      // Apply changes from other clients
+      function applyRemoteChanges(changes) {
+        if (!changes || !changes.from || !changes.to) {
+          console.error('Invalid remote changes:', changes);
+          return;
+        }
+    
+        ignoreRemoteChanges = true;
+        try {
+          editor.replaceRange(
+            changes.text || '',
+            changes.from,
+            changes.to,
+            'remote'
+          );
+          
+          if (changes.from.line !== changes.to.line) {
+            editor.scrollIntoView({
+              from: changes.from,
+              to: changes.to
+            }, 100);
+          }
+        } catch (err) {
+          console.error('Error applying remote changes:', err);
+        } finally {
+          ignoreRemoteChanges = false;
+        }
+      }
+    
+      // Update remote cursor position
+      function updateRemoteCursor(clientId, cursorPos) {
+        //const cursorEl = remoteCursors[clientId];
+ 
+
+        if (!editor || !remoteCursorsContainer) {
+          console.error('Editor or container not ready');
+          return;
+        }
+
+        // Create cursor element if it doesn't exist
+        if (!remoteCursors[clientId]) {
+          const cursorEl = document.createElement('div');
+          cursorEl.className = 'remote-cursor';
+          //cursorEl.style.backgroundColor = stringToColor(clientId);
+          cursorEl.innerHTML = `<span class="cursor-label">User-${clientId.slice(-3)}</span>`;
+          remoteCursorsContainer.appendChild(cursorEl);
+          remoteCursors[clientId] = cursorEl;
+          cursorEl.style.animation = 'cursorPulse 1.5s ease infinite';
+        }
+
+        const cursorEl = remoteCursors[clientId];
+        
+        try {
+          // Get coordinates and update position
+          const coords = editor.cursorCoords(cursorPos, 'page');
+          cursorEl.style.position = 'absolute';
+          cursorEl.style.left = `${coords.left}px`;
+          cursorEl.style.top = `${coords.top}px`;
+          cursorEl.style.height = `${coords.bottom - coords.top}px`;
+          cursorEl.style.display = 'block';
+          
+          console.log(`Updated cursor for ${clientId} at`, cursorPos, coords);
+        } catch (err) {
+          console.error('Error updating cursor:', err);
+        }
+      }
+            
+      // Remove cursor indicator
+      function removeCursorIndicator(clientId) {
+        if (remoteCursors[clientId]) {
+          remoteCursors[clientId].remove();
+          delete remoteCursors[clientId];
+        }
+      }
+    
+      // Generate color from string
+      function stringToColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const hue = Math.abs(hash % 360);
+        return `hsl(${hue}, 80%, 60%)`;
+      }
+    
+      // File upload handler
+      fileUpload.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+    
+        uploadStatus.textContent = 'Uploading...';
+        uploadStatus.style.color = '#666';
+    
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+    
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+          });
+    
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Upload failed');
+          }
+    
+          const result = await response.json();
+          uploadStatus.textContent = 'Uploaded!';
+          uploadStatus.style.color = 'green';
+          
+          if (file.type.startsWith('image/')) {
+            editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
+          } else {
+            editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
+          }
+        } catch (error) {
+          uploadStatus.textContent = error.message;
+          uploadStatus.style.color = 'red';
+        } finally {
+          setTimeout(() => {
+            uploadStatus.textContent = '';
+          }, 3000);
+          fileUpload.value = '';
+        }
+      });
+    
+      // Update preview function
+      function updatePreview() {
+        const code = editor.getValue();
+        preview.srcdoc = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              ${code.includes('<style>') ? '' : 'body { padding: 20px; }'}
+            </style>
+          </head>
+          <body>
+            ${code}
+            <script>
+              ${code.includes('<script>') ? '' : '// Your JS here'}
+            <\/script>
+          </body>
+          </html>
+        `;
+      }
+    
+      // Auto-save function
+      function autoSave() {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          saveProject(editor.getValue());
+        }, DEBOUNCE_TIME);
+      }
+    
+      // Save project to backend
+      async function saveProject(code) {
+        const statusEl = document.getElementById('save-status');
+        statusEl.textContent = 'Saving...';
+        statusEl.style.color = '#666';
+        
+        try {
+          const response = await fetch('/project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              code,
+              id: currentProjectId 
+            })
+          });
+          
+          const { id } = await response.json();
+          if (!currentProjectId) {
+            currentProjectId = id;
+            window.history.pushState({}, '', `/?id=${id}`);
+          }
+          statusEl.textContent = 'Saved';
+          statusEl.style.color = 'green';
+          setTimeout(() => statusEl.textContent = 'Ready', 2000);
+        } catch (error) {
+          statusEl.textContent = 'Save failed';
+          statusEl.style.color = 'red';
+        }
+      }
+    
+      // View state cycling
+      function cycleView() {
+        viewState = (viewState + 1) % 3;
+        container.className = '';
+        
+        switch(viewState) {
+          case 0: // Both visible
+            toggleBtn.textContent = 'Hide Preview';
+            break;
+          case 1: // Code only
+            container.classList.add('code-only');
+            toggleBtn.textContent = 'Preview Only';
+            break;
+          case 2: // Preview only
+            container.classList.add('preview-only');
+            toggleBtn.textContent = 'Show Both';
+            break;
+        }
+        editor.refresh();
+      }
+    
+      // Editor change handler
+      editor.on('change', (cm, change) => {
+        // Only send local changes
+        if (change.origin !== 'setValue' && change.origin !== 'remote') {
+          if (currentProjectId && socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+              type: 'edit',
+              projectId: currentProjectId,
+              changes: {
+                from: change.from,
+                to: change.to,
+                text: change.text,
+                origin: change.origin
+              }
+            }));
+          }
+        }
+    
+        autoSave();
+        updatePreview();
+      });
+    
+      // Cursor activity handler
+      editor.on('cursorActivity', () => {
+        if (currentProjectId && socket && socket.readyState === WebSocket.OPEN) {
+          const cursor = editor.getCursor();
+          socket.send(JSON.stringify({
+            type: 'cursor',
+            projectId: currentProjectId,
+            clientId: clientId,
+            cursorPos: cursor
+          }));
+        }
+      });
+    
+      // Save before window closes
+      window.addEventListener('beforeunload', () => {
+        saveProject(editor.getValue());
+      });
+    
+      // Set up event listeners
+      toggleBtn.addEventListener('click', cycleView);
+    
+      // Load existing project if ID in URL
+      if (currentProjectId) {
+        fetch(`/api/project/${currentProjectId}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.code) {
+              editor.setValue(data.code);
+              updatePreview();
+            }
+          })
+          .catch(console.error);
+      }
+    
+      // Initial preview update
+      updatePreview();
+      connectWebSocket();
     });
-  </script>
+    </script>
 </body>
 </html>

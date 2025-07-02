@@ -1,0 +1,47 @@
+install node
+install chocolaty
+npm install multer
+npm install express-rate-limit
+npm install ws
+npm install dotenv
+
+install postgress >> choco install postgresql
+
+WARNING: Generated password: 4ffbb472001a44b2bffd849b908e494c
+i chanegd the postgres user pw to:qqqq
+
+
+
+BUGS 
+
+grote bug: elke keer als hij saved saved hij niete random string id database hahaha dus eigelijk altijd 'remix' als je saved....
+
+
+
+er worden dingen aangemaakt in de projects table maar het code field, de data van de web editor is leeg... mm als ik consolog doe is er wel data lol
+en en en nu saved hij wel.
+
+
+postgres=# \c glitch
+You are now connected to database "glitch" as user "postgres".
+glitch=# \dt
+          List of relations
+ Schema |   Name   | Type  |  Owner
+--------+----------+-------+----------
+ public | projects | table | postgres
+(1 row)
+
+
+glitch=# SELECT * FROM projects;
+   id   | code |         expires_at
+--------+------+----------------------------
+ q2csem |      | 2025-07-06 17:22:29.613+08
+ lpbql5 |      | 2025-07-06 17:38:43.038+08
+ rjuznm |      | 2025-07-06 17:42:39.58+08
+ akkrbb |      | 2025-07-06 17:42:46.964+08
+ dd0xt9 |      | 2025-07-06 17:47:36.797+08
+ w11gqk |      | 2025-07-06 17:57:05.83+08
+(6 rows)
+
+
+glitch=# exit
