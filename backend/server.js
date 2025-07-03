@@ -16,7 +16,15 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
-const { initDB, upsertProject, getProjectById } = require('./db');
+const { 
+  pool,
+  initDB, 
+  upsertProject, 
+  getProjectById,
+  addProjectAsset,
+  getProjectAssets,  
+  removeProjectAsset
+} = require('./db');
 
 // Initialize express app
 const app = express();
@@ -93,15 +101,82 @@ app.get('/api/project/:id', async (req, res) => {
   }
 });
 
-app.post('/upload', uploadLimiter, upload.single('file'), (req, res) => {
+// Add these routes after your existing ones
+app.get('/api/project/:id/assets', async (req, res) => {
+  try {
+    const assets = await getProjectAssets(req.params.id);
+    res.json(assets);
+  } catch (err) {
+    console.error('Error loading assets:', err);
+    res.status(500).json({ error: 'Failed to load assets' });
+  }
+});
+
+app.delete('/api/project/:id/assets', async (req, res) => {
+  try {
+    const { url } = req.body; // Asset URL to delete
+    const projectId = req.params.id;
+
+    // Delete asset from the database
+    await removeProjectAsset(projectId, url);
+
+    // Also delete the actual file from the server
+    const filename = path.basename(url);
+    const filePath = path.join(__dirname, 'public/uploads', filename);
+    fs.unlinkSync(filePath);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting asset:', err);
+    res.status(500).json({ error: 'Failed to delete asset' });
+  }
+});
+
+app.post('/upload/:projectId', uploadLimiter, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded or invalid file type' });
   }
-  res.json({
-    url: `/uploads/${req.file.filename}`,
-    type: req.file.mimetype,
-    size: req.file.size
-  });
+
+  try {
+    const asset = {
+      url: `/uploads/${req.file.filename}`,
+      filename: req.file.originalname,
+      type: req.file.mimetype,
+      size: req.file.size
+    };
+
+    const projectId = req.params.projectId; // Take projectId directly from the URL
+
+    // Validate that the projectId exists in the projects table
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return res.status(400).json({ error: 'Invalid projectId' });
+    }
+
+    console.log("Asset data before adding:", asset); // Debug log
+    console.log("Project ID:", projectId); // Debug log
+
+    // Add asset to database
+    const addedAsset = await addProjectAsset(projectId, asset);
+    console.log("Added asset:", addedAsset); // Debug log
+
+    res.json({
+      ...addedAsset,
+      projectId // Return project ID for new projects
+    });
+  } catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ error: 'Failed to process upload' });
+  }
+});
+
+app.get('/fix-db', async (req, res) => {
+  try {
+    await initDB();
+    res.send("Database tables initialized");
+  } catch (err) {
+    res.status(500).send("Error: " + err.message);
+  }
 });
 
 // Serve uploaded files
@@ -110,13 +185,66 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // Helper functions
 function generateProjectId() {
   return Math.random().toString(36).substring(2, 8);
-}
+};
+
+
+// Server initialization / aka creating databases
+// (async () => {
+//   try {
+//     console.log("Initializing database...");
+//     await initDB();
+//     console.log("Database initialized successfully");
+//   } catch (err) {
+//     console.error("Failed to initialize database:", err);
+//     process.exit(1); // Exit if database initialization fails
+//   }
+
 
 // Server initialization
 const server = app.listen(process.env.PORT || 3000, () => {
   console.log(`Server running on port ${server.address().port}`);
 });
 
+// Add these handler functions
+async function handleAssetAdded(projectId, asset) {
+  try {
+    // Add to database first
+    await addProjectAsset(projectId, asset);
+    
+    // Then broadcast to other clients
+    const projectClients = clients.get(projectId) || [];
+    projectClients.forEach(client => {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({
+          type: 'asset-added',
+          asset
+        }));
+      }
+    });
+  } catch (err) {
+    console.error('Error handling asset addition:', err);
+  }
+}
+
+async function handleAssetRemoved(projectId, assetUrl) {
+  try {
+    // Remove from database first
+    await removeProjectAsset(projectId, assetUrl);
+    
+    // Then broadcast to other clients
+    const projectClients = clients.get(projectId) || [];
+    projectClients.forEach(client => {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({
+          type: 'asset-removed',
+          assetUrl
+        }));
+      }
+    });
+  } catch (err) {
+    console.error('Error handling asset removal:', err);
+  }
+}
 
 // WebSocket Server
 const wss = new WebSocket.Server({ server });
@@ -143,6 +271,12 @@ wss.on('connection', (ws) => {
           // Optional: Handle cursor position updates
           broadcastCursor(data.projectId, data.cursorPos, data.clientId, ws);
           break;
+        case 'asset-added':
+          handleAssetAdded(data.projectId, data.asset);
+          break;
+        case 'asset-removed':
+          handleAssetRemoved(data.projectId, data.assetUrl);
+          break;
       }
     } catch (err) {
       console.error('Error processing message:', err);
@@ -155,7 +289,7 @@ wss.on('connection', (ws) => {
 });
 
 
-// Handle new client joining a project
+// join handler and asset syncer
 function handleJoin(ws, projectId) {
   if (!clients.has(projectId)) {
     clients.set(projectId, []);
@@ -172,6 +306,54 @@ function handleJoin(ws, projectId) {
     type: 'init',
     clientId
   }));
+
+// better but non working error handling
+  // async function handleJoin(ws, projectId) {
+  //   if (!clients.has(projectId)) {
+  //     clients.set(projectId, []);
+  //   }
+    
+  //   const clientId = generateClientId();
+  //   clients.get(projectId).push({
+  //     ws,
+  //     clientId
+  //   });
+    
+  //   // Send welcome message with client ID
+  //   ws.send(JSON.stringify({
+  //     type: 'init',
+  //     clientId
+  //   }));
+  
+  //   try {
+  //     // Send existing assets
+  //     const assets = await getProjectAssets(projectId);
+  //     if (assets.length > 0) {
+  //       ws.send(JSON.stringify({
+  //         type: 'assets',
+  //         assets
+  //       }));
+  //     }
+  //   } catch (err) {
+  //     console.error('Error loading assets:', err);
+  //     // Optionally send error message to client
+  //     ws.send(JSON.stringify({
+  //       type: 'error',
+  //       message: 'Could not load assets'
+  //     }));
+  //   }
+  // }
+  // Send existing assets
+  getProjectAssets(projectId).then(assets => {
+    if (assets.length > 0) {
+      ws.send(JSON.stringify({
+        type: 'assets',
+        assets
+      }));
+    }
+  }).catch(err => {
+    console.error('Error sending assets:', err);
+  });
 }
 
 // Handle code edits and broadcast to others

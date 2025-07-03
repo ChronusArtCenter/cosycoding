@@ -1,5 +1,28 @@
 <!DOCTYPE html>
 <html>
+
+<!-- QUICK START
+
+Welcom to the CosyCode Static Web Editor, inspired by Glitch.com and Etherpad.
+On the left you have your code editor and on the right a realtime html preview pane.
+After your first edit, the page will be stored and the URL will be update to reflect your project id, for sharing and later editing (you have 10MB storage). 
+You can collaboratively code in realtime with remote (and local) users.
+
+
+URL Parameters:
+
+index.html?id=w26k1v&view=preview - Starts in preview-only mode
+
+index.html?id=w26k1v&?view=code - Starts in code-only mode
+
+index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is the project id 
+
+TODO:
+-author cursors are messed up, they do not scroll for example.
+-initDB ie never called, so new tables are not created
+-cycleview is broken, you cant see code only view anymore
+-->
+
 <head>
   <title>CosyCoder</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
@@ -13,8 +36,46 @@
       padding: 0;
       height: 100%;
       overflow: hidden; /* Prevent double scrollbars */
+      font-family: 'gyre',sans-serif;
     }
     
+    @font-face {
+      font-family: 'Cooper-Light-BT';
+      src:url('fonts/Cooper-Light-BT.ttf.woff') format('woff'),
+          url('fonts/Cooper-Light-BT.ttf.svg#Cooper-Light-BT') format('svg'),
+          url('fonts/Cooper-Light-BT.ttf.eot'),
+          url('fonts/Cooper-Light-BT.ttf.eot?#iefix') format('embedded-opentype'); 
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: gyre;
+      src: url("fonts/GyreHerosVariableVF.woff2") format("woff2-variations");
+      font-weight: 400 700;
+      font-stretch: 50% 100%;
+    }
+    @font-face {
+      font-family: meta;
+      src: url("fonts/ocr-x-light.woff2")
+    }
+    .preview-only #header {
+       display:none;
+    }
+    #header {
+      position: relative;
+      font-family: gyre;
+      font-variation-settings: "wght" 40;
+      font-size: 10pt;
+      margin-block-start: 0;
+      margin-block-end: 0;
+      margin-inline-start: 0;
+      color: var(--txt-color);
+      font-weight: normal;
+      width:100%;
+      left:50px;
+      padding:10px;
+      color:coral;
+    }
     .victor-mono-editor {
       font-family: "Victor Mono", monospace;
       font-optical-sizing: auto;
@@ -24,22 +85,32 @@
     #container {
       display: flex;
       height: 100vh;
+      margin-left: 40px; /* Space for peeked sidebar */
+      transition: margin-left 0.3s ease; /* Smooth transition */
     }
     #editor-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      transition: all 0.3s ease;
+      flex: 0 0 50%; /* Default width */
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ccc;
+  transition: flex 0.3s ease; /* Smooth resizing */
     }
+    #header-container {
+  position: fixed; /* Keep the header fixed at the top */
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
+  background: #f8f9fa; /* Optional: Add a background color */
+  border-bottom: 1px solid #dee2e6; /* Optional: Add a border */
+}
     #editor {
       height: 100%;
     }
     #preview-container {
-      flex: 1;
+      flex: 1; /* Default width */
       border-left: 1px solid #ccc;
-      position: relative;
-      transition: flex 0.3s ease;
-      overflow: hidden;
+      transition: flex 0.3s ease; /* Smooth resizing */
     }
     #preview {
       height: 100%;
@@ -48,13 +119,16 @@
     }
     #view-toggle {
       position: absolute;
-      top: 10px;
-      right: 10px;
+      top: 5px;
+      right: 20px;
       z-index: 100;
       padding: 5px 10px;
-      background: #f0f0f0;
-      border: 1px solid #ccc;
+      background: coral;
+      color: white;
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
+      z-index: 9999;
     }
     /* View states */
     .code-only #preview-container {
@@ -64,15 +138,18 @@
     .preview-only #editor-container {
        display:none;
     }
+    .preview-only #header-container {
+       display:none;
+    }
     .preview-only #preview-container {
       border-left: none;
     }
     #save-status {
-      font-style: italic;
       position: absolute;
       bottom: 10px;
       right: 10px;
       z-index: 100;
+      font-size: 9pt;
     }
     #file-upload {
       display: none;
@@ -84,10 +161,6 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      margin-right: 10px;
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
       z-index: 100;
     }
     .upload-btn:hover {
@@ -101,96 +174,191 @@
     }
     .CodeMirror {
       height: 100%;
-      font-family: 'Victor Mono', 'Courier New', monospace;
-      font-size: 14px;
+      font-family: 'meta', 'Courier New', monospace;
+      font-size: 15px;
       line-height: 1.5;
     }
+ 
+    /* Sidebar Styles */
+    #assets-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 250px;
+      background: #f8f9fa;
+      border-right: 1px solid #dee2e6;
+      z-index: 1000;
+      transform: translateX(-84%); /* Show 10% of sidebar */
+      transition: transform 0.3s ease;
+      padding: 20px 10px;
+      overflow-y: auto;
+    }
 
+    #assets-sidebar.show {
+      transform: translateX(0); /* Fully show when toggled */
+    }
+    #assets-sidebar.hidden {
+      display: none;
+    }
+    /* Adjust main container when sidebar is shown */
+    body.show-sidebar #container {
+      margin-left: 260px; /* Space for the visible sidebar */
+    }
+
+    /* Adjust main container when sidebar is hidden */
+    body:not(.show-sidebar) #container {
+      margin-left: 0; /* No space for the sidebar */
+    }
+
+    #sidebar-toggle {
+      position: absolute;
+      right: 10px; /* Position inside the visible portion */
+      top: 15px;
+      width: 30px;
+      height: 30px;
+      border: 1px solid #dee2e6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 4px;
+      z-index: 1001; /* Above the sidebar */
+    }
+
+    /* When sidebar is hidden (default state) */
+    #assets-sidebar:not(.show) {
+      box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* When sidebar is shown */
+    #assets-sidebar.show {
+      box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* Adjust main container */
+    body.show-sidebar #container {
+      margin-left: 260px;
+    }
+
+    /* Add hover effect to peek sidebar */
+    #assets-sidebar:not(.show):hover {
+      transform: translateX(-80%); /* Show more on hover */
+      cursor: pointer;
+    }
+
+    /* Ensure toggle button is always visible */
+    #assets-sidebar:not(.show) #sidebar-toggle {
+      right: calc(10% - 20px); /* Adjust position based on visible portion */
+      background: #fff;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    #divider {
+      width: 5px;
+      cursor: ew-resize; /* Horizontal resize cursor */
+      background: #ccc;
+      position: relative;
+      z-index: 10;
+    }
     .remote-cursor {
-  position: absolute;
-  border-left: 2px solid;
-  height: 1em;
-  white-space: nowrap;
-  /* Add subtle animation for smooth movement */
-  transition: transform 0.1s ease;
-}
+      position: absolute;
+      border-left: 2px solid;
+      height: 1em;
+      white-space: nowrap;
+      /* Add subtle animation for smooth movement */
+      transition: transform 0.1s ease;
+    }
 
-.cursor-label {
-  position: relative;
-  top: -1.5em;
-  font-size: 0.8em;
-  padding: 2px 6px;
-  background: inherit;
-  color: white;
-  /* Rounded edges */
-  border-radius: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  /* Semi-transparent background */
-  background-color: rgba(0, 0, 0, 0.6);
-  /* Text shadow for better readability */
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
-  /* Smooth transitions */
-  transition: all 0.2s ease;
-  /* Prevent text selection */
-  user-select: none;
-  /* Add some depth */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  /* Make the label slightly wider */
-  min-width: 20px;
-  text-align: center;
-  /* Add a small pointer triangle */
-  &:after {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 4px solid rgba(0, 0, 0, 0.6);
+    .cursor-label {
+      position: relative;
+      top: -1.5em;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      background: inherit;
+      color: white;
+      /* Rounded edges */
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      /* Semi-transparent background */
+      background-color: rgba(0, 0, 0, 0.6);
+      /* Text shadow for better readability */
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+      /* Smooth transitions */
+      transition: all 0.2s ease;
+      /* Prevent text selection */
+      user-select: none;
+      /* Add some depth */
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      /* Make the label slightly wider */
+      min-width: 20px;
+      text-align: center;
+      /* Add a small pointer triangle */
+      &:after {
+        content: '';
+        position: absolute;
+        bottom: -4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 4px solid rgba(0, 0, 0, 0.6);
+      }
+    }
+
+
+    /* Optional: Add a subtle pulse animation to make cursors more noticeable */
+    @keyframes cursorPulse {
+      0% { opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { opacity: 0.8; }
+    }
+
+    .remote-cursor:hover .cursor-label {
+      /* Enhance on hover */
+      background-color: rgba(0, 0, 0, 0.8);
+      transform: scale(1.05);
+    }
+    /* Make sure CodeMirror lines are positioned relative */
+    .CodeMirror-line {
+      position: relative;
+    }
+    @media (max-width: 768px) {
+      .remote-cursor {
+        height: 1.5em; /* Larger cursor for touch devices */
+      }
   }
-}
-
-/* Optional: Add a subtle pulse animation to make cursors more noticeable */
-@keyframes cursorPulse {
-  0% { opacity: 0.8; }
-  50% { opacity: 1; }
-  100% { opacity: 0.8; }
-}
-
-.remote-cursor:hover .cursor-label {
-  /* Enhance on hover */
-  background-color: rgba(0, 0, 0, 0.8);
-  transform: scale(1.05);
-}
-/* Make sure CodeMirror lines are positioned relative */
-.CodeMirror-line {
-  position: relative;
-}
-@media (max-width: 768px) {
-  .remote-cursor {
-    height: 1.5em; /* Larger cursor for touch devices */
-  }
-}
   </style>
 </head>
 <body>
+  <div id="header-container">
+    <div id="header">CosyCoder</div>
+  </div>
+
+   <div id="assets-sidebar">
+    <div id="sidebar-toggle">☰</div>
+    <label for="file-upload" class="upload-btn">
+      Upload Assets
+    </label>
+    <input type="file" id="file-upload" accept="image/*,.css,.js">
+    <span id="upload-status"></span>
+
+    <h3> </h3>
+    <ul id="assets-list"></ul>
+  </div>
+
   <div id="app">
     <div id="toolbar">
       <span id="save-status">Ready</span>
-      <label for="file-upload" class="upload-btn">
-        Upload Assets
-      </label>
-      <input type="file" id="file-upload" accept="image/*,.css,.js">
-      <span id="upload-status"></span>
-      <button id="view-toggle">Hide Preview</button>
+     
+      <button id="view-toggle">Full Preview</button>
     </div>
     <div id="container">
       <div id="editor-container">
         <textarea id="editor"></textarea>
       </div>
+      <div id="divider"></div> <!-- Draggable divider -->
       <div id="preview-container">
         <iframe id="preview"></iframe>
       </div>
@@ -211,9 +379,87 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
   <script>
-          let remoteCursorsContainer;
+      // global scope
+      let currentProjectId = new URLSearchParams(window.location.search).get('id');
+      let remoteCursorsContainer;
+      let uploadedAssets = [];
+
+      // Helper functions
+      function copyToClipboard(text) {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            const status = document.getElementById('save-status');
+            status.textContent = 'URL copied!';
+            status.style.color = 'green';
+            setTimeout(() => status.textContent = 'Ready', 2000);
+          });
+      }
+      function deleteAsset(button, url) {
+  if (confirm('Delete this asset?')) {
+    // Remove from UI
+    button.closest('li').remove();
+
+    // Call API to delete asset from server
+    fetch(`/api/project/${currentProjectId}/assets`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to delete asset');
+        }
+   
+        console.log('Deleting asset:', { url, projectId: currentProjectId });
+        console.log('Asset deleted successfully');
+      })
+      .catch(err => {
+        console.error('Error deleting asset:', err);
+        alert('Failed to delete asset');
+      });
+  }
+}
+
+
+const divider = document.getElementById('divider');
+const editorContainer = document.getElementById('editor-container');
+const previewContainer = document.getElementById('preview-container');
+
+let isDragging = false;
+
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize'; // Change cursor while dragging
+  previewContainer.querySelector('iframe').style.pointerEvents = 'none'; // Disable pointer events on iframe
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+
+  const containerRect = document.getElementById('container').getBoundingClientRect();
+  const newEditorWidth = e.clientX - containerRect.left;
+
+  // Set minimum and maximum widths for the editor and preview
+  const minWidth = 100; // Minimum width for editor
+  const maxWidth = containerRect.width - minWidth; // Minimum width for preview
+
+  if (newEditorWidth > minWidth && newEditorWidth < maxWidth) {
+    editorContainer.style.flex = `0 0 ${newEditorWidth}px`;
+    previewContainer.style.flex = `1`;
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  isDragging = false;
+  document.body.style.cursor = ''; // Reset cursor
+  previewContainer.querySelector('iframe').style.pointerEvents = ''; // Re-enable pointer events on iframe
+});
+
 
     document.addEventListener('DOMContentLoaded', function() {
+      //todo HACK
+      document.getElementById('container').style.marginLeft = '40px'; //this needs to be fixed somewhere else...
+
       // Initialize editor with enhanced syntax highlighting
       const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
         mode: 'htmlmixed',
@@ -254,11 +500,39 @@
     
       // DOM elements
       const container = document.getElementById('container');
+      const headerContainer = document.getElementById('header-container'); // hide the header on preview
       const toggleBtn = document.getElementById('view-toggle');
       const preview = document.getElementById('preview');
       const fileUpload = document.getElementById('file-upload');
       const uploadStatus = document.getElementById('upload-status');
       const saveStatus = document.getElementById('save-status');
+
+      // Check URL for view parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('view')) {
+        const viewParam = urlParams.get('view');
+        if (viewParam === 'preview') {
+          viewState = 2; // Set to preview-only state
+        } else if (viewParam === 'code') {
+          viewState = 1; // Set to code-only state
+        }
+      }
+
+      // Apply initial view state from URL parameters
+      container.className = '';
+      headerContainer.className = ''; 
+      switch(viewState) {
+        case 1:
+          container.classList.add('code-only');
+          toggleBtn.textContent = 'Preview Only';
+          break;
+        case 2:
+          container.classList.add('preview-only');
+          headerContainer.classList.add('preview-only');
+          toggleBtn.textContent = 'Show Both';
+          break;
+      }
+
 
     
       // Initialize WebSocket connection
@@ -404,46 +678,94 @@
     
       // File upload handler
       fileUpload.addEventListener('change', async function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
+
+  uploadStatus.textContent = 'Uploading...';
+  uploadStatus.style.color = '#666';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`/upload/${currentProjectId}`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    const result = await response.json();
+    uploadStatus.textContent = 'Uploaded!';
+    uploadStatus.style.color = 'green';
     
-        uploadStatus.textContent = 'Uploading...';
-        uploadStatus.style.color = '#666';
+    // Add to sidebar
+    addAssetToSidebar(result.url, file.name);
     
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
+    if (file.type.startsWith('image/')) {
+      editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
+    } else {
+      editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
+    }
+  } catch (error) {
+    uploadStatus.textContent = error.message;
+    uploadStatus.style.color = 'red';
+  } finally {
+    setTimeout(() => {
+      uploadStatus.textContent = '';
+    }, 3000);
+    fileUpload.value = '';
+  }
+});
     
-          const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
-          });
-    
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Upload failed');
-          }
-    
-          const result = await response.json();
-          uploadStatus.textContent = 'Uploaded!';
-          uploadStatus.style.color = 'green';
-          
-          if (file.type.startsWith('image/')) {
-            editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
-          } else {
-            editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
-          }
-        } catch (error) {
-          uploadStatus.textContent = error.message;
-          uploadStatus.style.color = 'red';
-        } finally {
-          setTimeout(() => {
-            uploadStatus.textContent = '';
-          }, 3000);
-          fileUpload.value = '';
-        }
+      // Sidebar functionality
+      const sidebar = document.getElementById('assets-sidebar');
+      const sidebarToggle = document.getElementById('sidebar-toggle');
+      const assetsList = document.getElementById('assets-list');
+      let uploadedAssets = [];
+
+      // Toggle sidebar
+      sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('show');
+        document.body.classList.toggle('show-sidebar');
       });
-    
+
+      
+
+      // Function to add asset to sidebar
+      function addAssetToSidebar(url, filename) {
+  const listItem = document.createElement('li');
+  const isImage = filename.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+  listItem.style.display = 'flex';
+  listItem.style.alignItems = 'center';
+  listItem.style.marginBottom = '10px';
+  listItem.style.position = 'relative';
+  listItem.style.left = '-40px';
+  
+  listItem.innerHTML = `
+    <div style="flex-shrink: 0; margin-right: 10px;">
+      ${isImage ? `<img src="${url}" alt="${filename}" style="width: 40px; height: 40px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px;">` : ''}
+    </div>
+    <div style="flex-grow: 1;">
+      <span style="font-size: 14px; color: #333;">${filename}</span>
+    </div>
+    <div style="flex-shrink: 0; display: flex; gap: 5px;">
+      <button title="Copy URL" onclick="copyToClipboard('${url}')" style="padding: 5px; border: none; background: #4CAF50; color: white; border-radius: 4px; cursor: pointer;">⎘</button>
+      <button title="Delete" onclick="deleteAsset(this, '${url}')" style="padding: 5px; border: none; background: #f44336; color: white; border-radius: 4px; cursor: pointer;">✕</button>
+    </div>
+  `;
+
+  document.getElementById('assets-list').appendChild(listItem);
+}
+
+
+
+      
+
       // Update preview function
       function updatePreview() {
         const code = editor.getValue();
@@ -492,6 +814,7 @@
           const { id } = await response.json();
           if (!currentProjectId) {
             currentProjectId = id;
+            console.log(currentProjectId);
             window.history.pushState({}, '', `/?id=${id}`);
           }
           statusEl.textContent = 'Saved';
@@ -505,23 +828,44 @@
     
       // View state cycling
       function cycleView() {
-        viewState = (viewState + 1) % 3;
+        viewState = (viewState + 1) % 2;
         container.className = '';
+        headerContainer.className = '';
+
+  
+          //const sidebar = document.getElementById('assets-sidebar'); // Reference the sidebar
+
         
         switch(viewState) {
           case 0: // Both visible
-            toggleBtn.textContent = 'Hide Preview';
+            toggleBtn.textContent = 'Show Preview';
+            window.history.replaceState({}, '', updateUrlParam('view', 'both'));
+            sidebar.classList.remove('hidden'); // Show the sidebar
+            document.getElementById('container').style.marginLeft = '40px'; // Reset margin for both views
             break;
-          case 1: // Code only
-            container.classList.add('code-only');
-            toggleBtn.textContent = 'Preview Only';
-            break;
-          case 2: // Preview only
+
+          case 1: // Preview only
             container.classList.add('preview-only');
+            headerContainer.classList.add('preview-only');
             toggleBtn.textContent = 'Show Both';
+            document.getElementById('container').style.marginLeft = '0px'; // Reset margin for both views
+            sidebar.classList.add('hidden'); // Completely hide the sidebar
+            document.body.classList.remove('show-sidebar'); // Adjust layout
+            window.history.replaceState({}, '', updateUrlParam('view', 'preview'));
             break;
         }
         editor.refresh();
+      }
+
+      // Helper function to update URL parameters
+      function updateUrlParam(key, value) {
+        const url = new URL(window.location);
+        if (value === 'both') {
+          url.searchParams.delete(key);
+        } else {
+          url.searchParams.set(key, value);
+        }
+        return url.toString();
       }
     
       // Editor change handler
@@ -569,6 +913,7 @@
     
       // Load existing project if ID in URL
       if (currentProjectId) {
+        // Fetch project code
         fetch(`/api/project/${currentProjectId}`)
           .then(res => res.json())
           .then(data => {
@@ -578,8 +923,16 @@
             }
           })
           .catch(console.error);
+
+        // Fetch project assets
+        fetch(`/api/project/${currentProjectId}/assets`)
+          .then(res => res.json())
+          .then(assets => {
+            assets.forEach(asset => addAssetToSidebar(asset.url, asset.filename));
+          })
+          .catch(console.error);
       }
-    
+          
       // Initial preview update
       updatePreview();
       connectWebSocket();

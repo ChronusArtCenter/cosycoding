@@ -1,14 +1,5 @@
-require('dotenv').config(); 
-
+require('dotenv').config();
 const { Pool } = require('pg');
-
-// const pool = new Pool({
-//   user: process.env.DB_USER,
-//   host: process.env.DB_HOST,
-//   database: process.env.DB_NAME,
-//   password: process.env.DB_PASSWORD,
-//   port: 5432,
-// });
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -17,23 +8,16 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
 });
-// const pool = new Pool({
-//   user: 'postgres',
-//   host: 'localhost',
-//   database: 'glitch',
-//   password: 'qqqq', 
-//   port: 5432,
-// });
 
-// Add error handling for the pool
 pool.on('error', (err) => {
   console.error('Unexpected database error:', err);
   process.exit(-1);
 });
 
-// Initialize database tables
+// Initialize database tables with assets support
 async function initDB() {
   try {
+    console.log("Creating projects table...");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projects (
         id VARCHAR(10) PRIMARY KEY,
@@ -41,14 +25,40 @@ async function initDB() {
         expires_at TIMESTAMPTZ NOT NULL
       );
     `);
-    console.log("Database tables initialized");
+    console.log("Projects table created/exists");
+
+    console.log("Creating assets table...");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS assets (
+        id SERIAL PRIMARY KEY,
+        project_id VARCHAR(10) NOT NULL,
+        url TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        type VARCHAR(100) NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_project
+          FOREIGN KEY(project_id) 
+          REFERENCES projects(id)
+          ON DELETE CASCADE,
+        UNIQUE(project_id, url)
+         );
+    `);
+    console.log("Assets table created/exists");
+
+    console.log("Creating index...");
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_assets_project_id 
+      ON assets(project_id)
+    `);
+    console.log("Database tables initialized successfully");
   } catch (err) {
     console.error("Database initialization failed:", err);
     throw err;
   }
 }
 
-// Save or update project
+// Project functions
 async function upsertProject({id, code, expiresAt}) {
   try {
     const result = await pool.query(
@@ -66,7 +76,6 @@ async function upsertProject({id, code, expiresAt}) {
   }
 }
 
-// Get project by ID
 async function getProjectById(id) {
   try {
     const result = await pool.query(
@@ -80,9 +89,56 @@ async function getProjectById(id) {
   }
 }
 
+// Asset functions
+async function addProjectAsset(projectId, asset) {
+  try {
+    console.log("Adding asset:", { projectId, asset }); // Debug log
+    const result = await pool.query(
+      `INSERT INTO assets (project_id, url, filename, type, size)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [projectId, asset.url, asset.filename, asset.type, asset.size]
+    );
+    console.log("Asset added:", result.rows[0]); // Debug log
+    return result.rows[0];
+  } catch (err) {
+    console.error("Failed to add asset:", err);
+    throw err;
+  }
+}
+
+async function getProjectAssets(projectId) {
+  try {
+    const result = await pool.query(
+      'SELECT url, filename, type, size, uploaded_at FROM assets WHERE project_id = $1 ORDER BY uploaded_at DESC',
+      [projectId]
+    );
+    return result.rows;
+  } catch (err) {
+    console.error("Failed to get assets:", err);
+    throw err;
+  }
+}
+
+async function removeProjectAsset(projectId, assetUrl) {
+  try {
+    await pool.query(
+      'DELETE FROM assets WHERE project_id = $1 AND url = $2',
+      [projectId, assetUrl]
+    );
+    console.log(`Asset deleted: ${assetUrl}`);
+  } catch (err) {
+    console.error('Failed to delete asset:', err);
+    throw err;
+  }
+}
+
 module.exports = {
   pool,
   initDB,
   upsertProject,
-  getProjectById
+  getProjectById,
+  addProjectAsset,
+  getProjectAssets,
+  removeProjectAsset
 };
