@@ -170,7 +170,7 @@ app.post('/upload/:projectId', uploadLimiter, upload.single('file'), async (req,
   }
 });
 
-app.get('/fix-db', async (req, res) => {
+app.get('/fix-db', async (req, res) => { // Go to localhost:3000/fix-db to initialize the database, could be used as install script
   try {
     await initDB();
     res.send("Database tables initialized");

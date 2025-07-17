@@ -84,26 +84,27 @@ TODO:
     }
     #container {
       display: flex;
-      height: 100vh;
-      margin-left: 40px; /* Space for peeked sidebar */
+      height: calc(100vh - 40px); /* Adjust height to account for the header */
+      margin-top: 40px; /* Push the container below the header */
       transition: margin-left 0.3s ease; /* Smooth transition */
     }
     #editor-container {
       flex: 0 0 50%; /* Default width */
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #ccc;
-  transition: flex 0.3s ease; /* Smooth resizing */
+      display: flex;
+      flex-direction: column;
+      overflow: auto; /* Ensure scrolling for large content */
+      transition: flex 0.3s ease; /* Smooth resizing */
     }
     #header-container {
-  position: fixed; /* Keep the header fixed at the top */
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
-  background: #f8f9fa; /* Optional: Add a background color */
-  border-bottom: 1px solid #dee2e6; /* Optional: Add a border */
-}
+      display: flex;
+      position: fixed; /* Keep the header fixed at the top */
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      background: #f8f9fa; /* Optional: Add a background color */
+      height: 40px; /* Set a fixed height for the header */
+    }
     #editor {
       height: 100%;
     }
@@ -139,7 +140,7 @@ TODO:
        display:none;
     }
     .preview-only #header-container {
-       display:none;
+       display:none !important;
     }
     .preview-only #preview-container {
       border-left: none;
@@ -267,6 +268,7 @@ TODO:
       white-space: nowrap;
       /* Add subtle animation for smooth movement */
       transition: transform 0.1s ease;
+      pointer-events: none !important;
     }
 
     .cursor-label {
@@ -305,7 +307,9 @@ TODO:
         border-right: 4px solid transparent;
         border-top: 4px solid rgba(0, 0, 0, 0.6);
       }
+      pointer-events: none !important;
     }
+
 
 
     /* Optional: Add a subtle pulse animation to make cursors more noticeable */
@@ -377,13 +381,21 @@ TODO:
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/html-hint.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
+  <!-- Load the comment addon -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/comment/comment.min.js"></script>
+
+  <!-- Load the keymap (important for shortcuts to work) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/comment/comment.min.js"></script>
+
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
   <script>
       // global scope
       let currentProjectId = new URLSearchParams(window.location.search).get('id');
       let remoteCursorsContainer;
       let uploadedAssets = [];
-
+      let editor; // Declare editor in the global scope
+      let previewUpdateTimeout; // 1 second delay for preview rendering
+      const PREVIEW_UPDATE_DELAY = 1000; // 1 second delay for preview rendering
       // Helper functions
       function copyToClipboard(text) {
         navigator.clipboard.writeText(text)
@@ -421,44 +433,49 @@ TODO:
 }
 
 
-const divider = document.getElementById('divider');
-const editorContainer = document.getElementById('editor-container');
-const previewContainer = document.getElementById('preview-container');
+    const divider = document.getElementById('divider');
+    const editorContainer = document.getElementById('editor-container');
+    const previewContainer = document.getElementById('preview-container');
 
-let isDragging = false;
+    let isDragging = false;
 
-divider.addEventListener('mousedown', (e) => {
-  isDragging = true;
-  document.body.style.cursor = 'ew-resize'; // Change cursor while dragging
-  previewContainer.querySelector('iframe').style.pointerEvents = 'none'; // Disable pointer events on iframe
-});
-
-document.addEventListener('mousemove', (e) => {
-  if (!isDragging) return;
-
-  const containerRect = document.getElementById('container').getBoundingClientRect();
-  const newEditorWidth = e.clientX - containerRect.left;
-
-  // Set minimum and maximum widths for the editor and preview
-  const minWidth = 100; // Minimum width for editor
-  const maxWidth = containerRect.width - minWidth; // Minimum width for preview
-
-  if (newEditorWidth > minWidth && newEditorWidth < maxWidth) {
-    editorContainer.style.flex = `0 0 ${newEditorWidth}px`;
-    previewContainer.style.flex = `1`;
-  }
-});
-
-document.addEventListener('mouseup', () => {
-  isDragging = false;
-  document.body.style.cursor = ''; // Reset cursor
-  previewContainer.querySelector('iframe').style.pointerEvents = ''; // Re-enable pointer events on iframe
-});
 
 
     document.addEventListener('DOMContentLoaded', function() {
       //todo HACK
       document.getElementById('container').style.marginLeft = '40px'; //this needs to be fixed somewhere else...
+
+      // Editor resizer
+      divider.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        document.body.style.cursor = 'ew-resize'; // Change cursor while dragging
+        previewContainer.querySelector('iframe').style.pointerEvents = 'none'; // Disable pointer events on iframe
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        const containerRect = document.getElementById('container').getBoundingClientRect();
+        const newEditorWidth = e.clientX - containerRect.left;
+
+        // Set minimum and maximum widths for the editor and preview
+        const minWidth = 100; // Minimum width for editor
+        const maxWidth = containerRect.width - minWidth; // Minimum width for preview
+
+        if (newEditorWidth > minWidth && newEditorWidth < maxWidth) {
+          editorContainer.style.flex = `0 0 ${newEditorWidth}px`;
+          previewContainer.style.flex = `1`;
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        isDragging = false;
+        document.body.style.cursor = ''; // Reset cursor
+        previewContainer.querySelector('iframe').style.pointerEvents = ''; // Re-enable pointer events on iframe
+
+          // Refresh the CodeMirror editor to fix layout issues
+          editor.refresh();
+      });
 
       // Initialize editor with enhanced syntax highlighting
       const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
@@ -476,7 +493,9 @@ document.addEventListener('mouseup', () => {
           "Ctrl-Space": "autocomplete",
           "'>'": function(cm) {
             cm.closeTag(cm, '>');
-          }
+          },
+          "Ctrl-/": "toggleComment",
+          "Cmd-/": "toggleComment" // For Mac users
         },
         gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
         foldGutter: true,
@@ -551,24 +570,36 @@ document.addEventListener('mouseup', () => {
         };
     
         socket.onmessage = (event) => {
-          //console.log('WebSocket message received:', event.data); // todo debug remove
           const message = JSON.parse(event.data);
-          
+
           switch (message.type) {
             case 'init':
-              clientId = message.clientId;
+              clientId = message.clientId; // Set the clientId when the init message is received
+              if (!clientId) {
+                console.error('clientId is undefined in init message:', message);
+              }
               break;
+
             case 'update':
               applyRemoteChanges(message.changes);
               break;
+
             case 'cursor':
               if (message.clientId !== clientId) {
-                updateRemoteCursor(message.clientId, message.cursorPos);
+                if (!message.clientId) {
+                  console.error('clientId is undefined in cursor message:', message);
+                } else {
+                  updateRemoteCursor(message.clientId, message.cursorPos);
+                }
               }
               break;
+
             case 'user-left':
               removeCursorIndicator(message.clientId);
               break;
+
+            default:
+              console.error('Unknown message type:', message.type);
           }
         };
     
@@ -622,41 +653,65 @@ document.addEventListener('mouseup', () => {
     
       // Update remote cursor position
       function updateRemoteCursor(clientId, cursorPos) {
-        //const cursorEl = remoteCursors[clientId];
- 
+  if (!editor || !remoteCursorsContainer) {
+    console.error('Editor or container not ready');
+    return;
+  }
 
-        if (!editor || !remoteCursorsContainer) {
-          console.error('Editor or container not ready');
-          return;
-        }
+  // Create cursor element if it doesn't exist
+  if (!remoteCursors[clientId]) {
+    const cursorEl = document.createElement('div');
+    cursorEl.className = 'remote-cursor';
+    cursorEl.innerHTML = `<span class="cursor-label">User-${clientId.slice(-3)}</span>`;
+    remoteCursorsContainer.appendChild(cursorEl);
+    remoteCursors[clientId] = { element: cursorEl, cursorPos: null };
+    cursorEl.style.animation = 'cursorPulse 1.5s ease infinite';
+  }
 
-        // Create cursor element if it doesn't exist
-        if (!remoteCursors[clientId]) {
-          const cursorEl = document.createElement('div');
-          cursorEl.className = 'remote-cursor';
-          //cursorEl.style.backgroundColor = stringToColor(clientId);
-          cursorEl.innerHTML = `<span class="cursor-label">User-${clientId.slice(-3)}</span>`;
-          remoteCursorsContainer.appendChild(cursorEl);
-          remoteCursors[clientId] = cursorEl;
-          cursorEl.style.animation = 'cursorPulse 1.5s ease infinite';
-        }
+  const cursorEl = remoteCursors[clientId].element;
 
-        const cursorEl = remoteCursors[clientId];
-        
-        try {
-          // Get coordinates and update position
-          const coords = editor.cursorCoords(cursorPos, 'page');
-          cursorEl.style.position = 'absolute';
-          cursorEl.style.left = `${coords.left}px`;
-          cursorEl.style.top = `${coords.top}px`;
-          cursorEl.style.height = `${coords.bottom - coords.top}px`;
-          cursorEl.style.display = 'block';
-          
-          console.log(`Updated cursor for ${clientId} at`, cursorPos, coords);
-        } catch (err) {
-          console.error('Error updating cursor:', err);
-        }
-      }
+  try {
+    // Store the cursor position
+    remoteCursors[clientId].cursorPos = cursorPos;
+
+    // Get coordinates and adjust for scroll position
+    const coords = editor.cursorCoords(cursorPos, 'local'); // Use 'local' for coordinates relative to the editor
+    const editorScroll = editor.getScrollInfo(); // Get scroll position
+    const gutterWidth = editor.getGutterElement().offsetWidth; // Get the width of the gutter (line numbers)
+    const editorPaddingLeft = parseInt(window.getComputedStyle(editor.getWrapperElement()).paddingLeft, 10) || 0; // Get padding
+    const editorBorderLeft = parseInt(window.getComputedStyle(editor.getWrapperElement()).borderLeftWidth, 10) || 0; // Get border width
+
+    // Log values for debugging
+    // console.log('Coords:', coords);
+    // console.log('Editor Scroll:', editorScroll);
+    // console.log('Gutter Width:', gutterWidth);
+    // console.log('Padding Left:', editorPaddingLeft);
+    // console.log('Border Left:', editorBorderLeft);
+
+    // Adjust cursor position
+    cursorEl.style.position = 'absolute';
+    cursorEl.style.left = `${coords.left - editorScroll.left + gutterWidth }px`; // Subtract gutter width, padding, and border
+    cursorEl.style.top = `${coords.top - editorScroll.top}px`;
+    cursorEl.style.height = `${coords.bottom - coords.top}px`;
+    cursorEl.style.display = 'block';
+
+    // console.log(`Updated cursor for ${clientId} at`, cursorPos, coords);
+  } catch (err) {
+    console.error('Error updating cursor:', err);
+  }
+}
+
+      // Update all remote cursors on scroll
+      editor.on('scroll', () => {
+        Object.keys(remoteCursors).forEach(clientId => {
+          const cursorPos = remoteCursors[clientId].cursorPos; // Use the stored cursor position for the client
+          if (cursorPos) {
+            updateRemoteCursor(clientId, cursorPos);
+          }
+        });
+      });
+
+    
             
       // Remove cursor indicator
       function removeCursorIndicator(clientId) {
@@ -768,31 +823,37 @@ document.addEventListener('mouseup', () => {
 
       // Update preview function
       function updatePreview() {
-        const code = editor.getValue();
-        preview.srcdoc = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              ${code.includes('<style>') ? '' : 'body { padding: 20px; }'}
-            </style>
-          </head>
-          <body>
-            ${code}
-            <script>
-              ${code.includes('<script>') ? '' : '// Your JS here'}
-            <\/script>
-          </body>
-          </html>
-        `;
+        // Clear any pending preview updates
+        clearTimeout(previewUpdateTimeout);
+        
+        // Schedule a new preview update after the delay
+        previewUpdateTimeout = setTimeout(() => {
+          const code = editor.getValue();
+          preview.srcdoc = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                ${code.includes('<style>') ? '' : 'body { padding: 20px; }'}
+              </style>
+            </head>
+            <body>
+              ${code}
+              <script>
+                ${code.includes('<script>') ? '' : '// Your JS here'}
+              <\/script>
+            </body>
+            </html>
+          `;
+        }, PREVIEW_UPDATE_DELAY);
       }
-    
-      // Auto-save function
-      function autoSave() {
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-          saveProject(editor.getValue());
-        }, DEBOUNCE_TIME);
+        // Debounce auto-save to prevent excessive saves    
+        // Auto-save function
+        function autoSave() {
+          clearTimeout(saveTimeout);
+          saveTimeout = setTimeout(() => {
+            saveProject(editor.getValue());
+          }, DEBOUNCE_TIME);
       }
     
       // Save project to backend
@@ -814,7 +875,7 @@ document.addEventListener('mouseup', () => {
           const { id } = await response.json();
           if (!currentProjectId) {
             currentProjectId = id;
-            console.log(currentProjectId);
+            // console.log(currentProjectId); // Debug
             window.history.pushState({}, '', `/?id=${id}`);
           }
           statusEl.textContent = 'Saved';
@@ -835,13 +896,17 @@ document.addEventListener('mouseup', () => {
   
           //const sidebar = document.getElementById('assets-sidebar'); // Reference the sidebar
 
-        
+          // height: calc(100vh - 40px); /* Adjust height to account for the header */
+          // margin-top: 40px; /* Push the container below the header */
+
         switch(viewState) {
           case 0: // Both visible
             toggleBtn.textContent = 'Show Preview';
             window.history.replaceState({}, '', updateUrlParam('view', 'both'));
             sidebar.classList.remove('hidden'); // Show the sidebar
             document.getElementById('container').style.marginLeft = '40px'; // Reset margin for both views
+            document.getElementById('header-container').style.display = 'flex'; // Hide the header in preview-only mode
+
             break;
 
           case 1: // Preview only
@@ -849,6 +914,8 @@ document.addEventListener('mouseup', () => {
             headerContainer.classList.add('preview-only');
             toggleBtn.textContent = 'Show Both';
             document.getElementById('container').style.marginLeft = '0px'; // Reset margin for both views
+            document.getElementById('preview-container').style.marginTop = '-40px'; // Reset margin for both views
+            document.getElementById('header-container').style.display = 'none'; // Hide the header in preview-only mode
             sidebar.classList.add('hidden'); // Completely hide the sidebar
             document.body.classList.remove('show-sidebar'); // Adjust layout
             window.history.replaceState({}, '', updateUrlParam('view', 'preview'));
@@ -885,9 +952,9 @@ document.addEventListener('mouseup', () => {
             }));
           }
         }
-    
+
         autoSave();
-        updatePreview();
+        updatePreview(); // This will now use the delayed version
       });
     
       // Cursor activity handler
