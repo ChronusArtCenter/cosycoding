@@ -38,7 +38,11 @@ const allowedMimeTypes = {
   'image/gif': 'gif',
   'image/webp': 'webp',
   'application/pdf': 'pdf',
-  'application/zip': 'zip'
+  'application/zip': 'zip',
+  'application/octet-stream': 'glb',
+  'model/gltf+json': 'gltf',
+  'text/plain': 'txt',
+  'text/csv': 'csv'
 };
 
 // File upload configuration
@@ -67,7 +71,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  limits: { fileSize: 40 * 1024 * 1024 } // 40MB
 });
 
 // Rate limiting

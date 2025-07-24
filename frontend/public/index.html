@@ -58,9 +58,7 @@ TODO:
       font-family: meta;
       src: url("fonts/ocr-x-light.woff2")
     }
-    .preview-only #header {
-       display:none;
-    }
+
     #header {
       position: relative;
       font-family: gyre;
@@ -132,13 +130,44 @@ TODO:
       z-index: 9999;
     }
     /* View states */
-    .code-only #preview-container {
+    /* .code-only #preview-container {
       flex: 0 0 0;
       border-left: none;
     }
     .preview-only #editor-container {
        display:none;
-    }
+    } */
+
+    .preview-only #editor-container,
+.preview-only #divider,
+.preview-only #assets-sidebar {
+  display: none !important;
+}
+
+.preview-only #preview-container {
+  flex: 1;
+  margin-left: 0;
+  border-left: none;
+}
+
+.preview-only #header-container {
+  display: none !important;
+}
+
+.preview-only #container {
+  margin-left: 0 !important;
+}
+    .code-only #preview-container {
+        display: none;
+      }
+
+      .code-only #editor-container {
+        flex: 1; /* Take full width */
+      }
+
+      .code-only #divider {
+        display: none;
+      }
     .preview-only #header-container {
        display:none !important;
     }
@@ -550,6 +579,8 @@ TODO:
           headerContainer.classList.add('preview-only');
           toggleBtn.textContent = 'Show Both';
           break;
+        default:
+          toggleBtn.textContent = 'Code Only';
       }
 
 
@@ -840,7 +871,7 @@ TODO:
             <body>
               ${code}
               <script>
-                ${code.includes('<script>') ? '' : '// Your JS here'}
+                ${code.includes('<script>') ? '' : ' '} 
               <\/script>
             </body>
             </html>
@@ -889,41 +920,45 @@ TODO:
     
       // View state cycling
       function cycleView() {
-        viewState = (viewState + 1) % 2;
+        viewState = (viewState + 1) % 3; // Cycle through 0, 1, 2
         container.className = '';
         headerContainer.className = '';
-
-  
-          //const sidebar = document.getElementById('assets-sidebar'); // Reference the sidebar
-
-          // height: calc(100vh - 40px); /* Adjust height to account for the header */
-          // margin-top: 40px; /* Push the container below the header */
+        sidebar.className = '';
 
         switch(viewState) {
           case 0: // Both visible
-            toggleBtn.textContent = 'Show Preview';
+            toggleBtn.textContent = 'Code Only';
             window.history.replaceState({}, '', updateUrlParam('view', 'both'));
-            sidebar.classList.remove('hidden'); // Show the sidebar
-            document.getElementById('container').style.marginLeft = '40px'; // Reset margin for both views
-            document.getElementById('header-container').style.display = 'flex'; // Hide the header in preview-only mode
-
+            sidebar.classList.remove('hidden');
+            document.getElementById('container').style.marginLeft = '40px';
+            document.getElementById('header-container').style.display = 'flex';
+            document.getElementById('divider').style.display = 'block';
             break;
 
-          case 1: // Preview only
+          case 1: // Code only
+            container.classList.add('code-only');
+            toggleBtn.textContent = 'Preview Only';
+            window.history.replaceState({}, '', updateUrlParam('view', 'code'));
+            sidebar.classList.remove('hidden');
+            document.getElementById('container').style.marginLeft = '40px';
+            document.getElementById('header-container').style.display = 'flex';
+            document.getElementById('divider').style.display = 'none';
+            break;
+
+          case 2: // Preview only
             container.classList.add('preview-only');
             headerContainer.classList.add('preview-only');
             toggleBtn.textContent = 'Show Both';
-            document.getElementById('container').style.marginLeft = '0px'; // Reset margin for both views
-            document.getElementById('preview-container').style.marginTop = '-40px'; // Reset margin for both views
-            document.getElementById('header-container').style.display = 'none'; // Hide the header in preview-only mode
-            sidebar.classList.add('hidden'); // Completely hide the sidebar
-            document.body.classList.remove('show-sidebar'); // Adjust layout
             window.history.replaceState({}, '', updateUrlParam('view', 'preview'));
+            document.getElementById('container').style.marginLeft = '0';
+            document.getElementById('header-container').style.display = 'none';
+            document.getElementById('divider').style.display = 'none';
+            sidebar.classList.add('hidden');
+            document.body.classList.remove('show-sidebar');
             break;
         }
         editor.refresh();
       }
-
       // Helper function to update URL parameters
       function updateUrlParam(key, value) {
         const url = new URL(window.location);
