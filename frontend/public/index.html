@@ -82,7 +82,7 @@ TODO:
     }
     #container {
       display: flex;
-      height: calc(100vh - 40px); /* Adjust height to account for the header */
+      height: calc(100vh - 0px); /* Adjust height to account for the header */
       margin-top: 40px; /* Push the container below the header */
       transition: margin-left 0.3s ease; /* Smooth transition */
     }
@@ -931,6 +931,7 @@ TODO:
             window.history.replaceState({}, '', updateUrlParam('view', 'both'));
             sidebar.classList.remove('hidden');
             document.getElementById('container').style.marginLeft = '40px';
+            document.getElementById('container').style.marginTop = '40px';
             document.getElementById('header-container').style.display = 'flex';
             document.getElementById('divider').style.display = 'block';
             break;
@@ -951,6 +952,7 @@ TODO:
             toggleBtn.textContent = 'Show Both';
             window.history.replaceState({}, '', updateUrlParam('view', 'preview'));
             document.getElementById('container').style.marginLeft = '0';
+            document.getElementById('container').style.marginTop = '0';
             document.getElementById('header-container').style.display = 'none';
             document.getElementById('divider').style.display = 'none';
             sidebar.classList.add('hidden');
