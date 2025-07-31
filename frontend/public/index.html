@@ -17,10 +17,7 @@ index.html?id=w26k1v&?view=code - Starts in code-only mode
 
 index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is the project id 
 
-TODO:
--author cursors are messed up, they do not scroll for example.
--initDB ie never called, so new tables are not created
--cycleview is broken, you cant see code only view anymore
+
 -->
 
 <head>
@@ -38,16 +35,6 @@ TODO:
       overflow: hidden; /* Prevent double scrollbars */
       font-family: 'gyre',sans-serif;
     }
-    
-    @font-face {
-      font-family: 'Cooper-Light-BT';
-      src:url('fonts/Cooper-Light-BT.ttf.woff') format('woff'),
-          url('fonts/Cooper-Light-BT.ttf.svg#Cooper-Light-BT') format('svg'),
-          url('fonts/Cooper-Light-BT.ttf.eot'),
-          url('fonts/Cooper-Light-BT.ttf.eot?#iefix') format('embedded-opentype'); 
-      font-weight: normal;
-      font-style: normal;
-    }
     @font-face {
       font-family: gyre;
       src: url("fonts/GyreHerosVariableVF.woff2") format("woff2-variations");
@@ -55,8 +42,32 @@ TODO:
       font-stretch: 50% 100%;
     }
     @font-face {
-      font-family: meta;
-      src: url("fonts/ocr-x-light.woff2")
+    font-family: "DejaVu Sans Mono";
+    font-style: normal;
+    font-weight: normal;
+    src: local(DejaVu Sans Mono), local(DejaVuSansMono),
+      url(fonts/DejaVuSansMono.woff) format("woff");
+    }
+    @font-face {
+      font-family: "DejaVu Sans Mono";
+      font-style: normal;
+      font-weight: bold;
+      src: local(DejaVu Sans Mono Bold), local(DejaVuSansMono-Bold),
+        url(fonts/DejaVuSansMono-Bold.woff) format("woff");
+    }
+    @font-face {
+      font-family: "DejaVu Sans Mono";
+      font-style: oblique;
+      font-weight: bold;
+      src: local(DejaVu Sans Mono Bold Oblique), local(DejaVuSansMono-BoldOblique),
+        url(fonts/DejaVuSansMono-BoldOblique.woff) format("woff");
+    }
+    @font-face {
+      font-family: "DejaVu Sans Mono";
+      font-style: oblique;
+      font-weight: normal;
+      src: local(DejaVu Sans Mono Oblique), local(DejaVuSansMono-Oblique),
+        url(fonts/DejaVuSansMono-Oblique.woff) format("woff");
     }
 
     #header {
@@ -74,6 +85,8 @@ TODO:
       padding:10px;
       color:coral;
     }
+    #headerLink{ color:coral; text-decoration: none;}
+
     .victor-mono-editor {
       font-family: "Victor Mono", monospace;
       font-optical-sizing: auto;
@@ -139,24 +152,24 @@ TODO:
     } */
 
     .preview-only #editor-container,
-.preview-only #divider,
-.preview-only #assets-sidebar {
-  display: none !important;
-}
+    .preview-only #divider,
+    .preview-only #assets-sidebar {
+      display: none !important;
+    }
 
-.preview-only #preview-container {
-  flex: 1;
-  margin-left: 0;
-  border-left: none;
-}
+    .preview-only #preview-container {
+      flex: 1;
+      margin-left: 0;
+      border-left: none;
+    }
 
-.preview-only #header-container {
-  display: none !important;
-}
+    .preview-only #header-container {
+      display: none !important;
+    }
 
-.preview-only #container {
-  margin-left: 0 !important;
-}
+    .preview-only #container {
+      margin-left: 0 !important;
+    }
     .code-only #preview-container {
         display: none;
       }
@@ -204,7 +217,7 @@ TODO:
     }
     .CodeMirror {
       height: 100%;
-      font-family: 'meta', 'Courier New', monospace;
+      font-family: 'DejaVu Sans Mono', 'Courier New', monospace;
       font-size: 15px;
       line-height: 1.5;
     }
@@ -366,7 +379,7 @@ TODO:
 </head>
 <body>
   <div id="header-container">
-    <div id="header">CosyCoder</div>
+    <div id="header"><a id="headerLink" href="?id=sgm1xi">CosyCoder</a></div>
   </div>
 
    <div id="assets-sidebar">
@@ -436,16 +449,16 @@ TODO:
           });
       }
       function deleteAsset(button, url) {
-  if (confirm('Delete this asset?')) {
-    // Remove from UI
-    button.closest('li').remove();
+        if (confirm('Delete this asset?')) {
+        // Remove from UI
+        button.closest('li').remove();
 
-    // Call API to delete asset from server
-    fetch(`/api/project/${currentProjectId}/assets`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
-    })
+        // Call API to delete asset from server
+        fetch(`/api/project/${currentProjectId}/assets`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        })
       .then(res => {
         if (!res.ok) {
           throw new Error('Failed to delete asset');
