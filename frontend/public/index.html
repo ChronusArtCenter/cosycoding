@@ -853,7 +853,7 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
           if (file.type.startsWith('image/')) {
             editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
           } else {
-            editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
+            editor.replaceSelection(`\n<a href="${result.url}" >${file.name}</a>\n`);
           }
         } catch (error) {
           uploadStatus.textContent = error.message;
