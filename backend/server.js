@@ -44,7 +44,7 @@ const allowedMimeTypes = {
   'model/gltf+json': 'gltf',
   'text/plain': 'txt',
   'text/csv': 'csv',
-  'text/javascript.js': 'js' 
+  'text/javascript': 'js' 
 };
 
 // File upload configuration
