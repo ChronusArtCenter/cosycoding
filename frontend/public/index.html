@@ -315,7 +315,7 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
 
     .cursor-label {
       position: relative;
-      top: -1.5em;
+      top: -2.1em;
       font-size: 0.8em;
       padding: 2px 6px;
       background: inherit;
@@ -336,6 +336,7 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
       /* Make the label slightly wider */
       min-width: 20px;
       text-align: center;
+      left:-32px;
       /* Add a small pointer triangle */
       &:after {
         content: '';
@@ -548,6 +549,7 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
       remoteCursorsContainer = document.createElement('div');
       remoteCursorsContainer.className = 'remote-cursors';
       editor.getWrapperElement().appendChild(remoteCursorsContainer);
+      
 
       // WebSocket and state variables
       let socket;
@@ -597,53 +599,97 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
       }
 
 
-    
+      // Compression helpers
+      async function compressMessage(data) {
+        if (!window.CompressionStream) {
+          return JSON.stringify(data); // Fallback to JSON if no compression support
+        }
+        
+        const jsonStr = JSON.stringify(data);
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode(jsonStr);
+        const cs = new CompressionStream('gzip');
+        const writer = cs.writable.getWriter();
+        writer.write(encoded);
+        writer.close();
+        const compressed = await new Response(cs.readable).arrayBuffer();
+        return compressed;
+      }
+
+      async function decompressMessage(compressed) {
+        if (!window.DecompressionStream || !(compressed instanceof ArrayBuffer)) {
+          return JSON.parse(compressed); // Fallback if no decompression support
+        }
+        
+        const ds = new DecompressionStream('gzip');
+        const writer = ds.writable.getWriter();
+        writer.write(compressed);
+        writer.close();
+        const decompressed = await new Response(ds.readable).arrayBuffer();
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(decompressed));
+      }
       // Initialize WebSocket connection
       function connectWebSocket() {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+
+          // connection timeout
+          const connectionTimeout = setTimeout(() => {
+            if (socket && socket.readyState === WebSocket.CONNECTING) {
+              socket.close();
+              console.log('WebSocket connection timeout, retrying...');
+              setTimeout(connectWebSocket, 1000);
+            }
+          }, 5000); // 5 second timeout
+
         socket = new WebSocket(`${wsProtocol}${window.location.host}`);
     
         socket.onopen = () => {
+          clearTimeout(connectionTimeout);
           console.log('WebSocket connected');
           if (currentProjectId) {
+            // Send join message with compression flag
             socket.send(JSON.stringify({
               type: 'join',
-              projectId: currentProjectId
+              projectId: currentProjectId,
+              supportsCompression: true // Indicate client supports compression
             }));
+          }
+          
+          // Enable binary mode if supported
+          if (socket.binaryType === undefined) {
+            socket.binaryType = 'arraybuffer';
           }
         };
     
-        socket.onmessage = (event) => {
-          const message = JSON.parse(event.data);
+        socket.onmessage = async (event) => {
+          let message;
+          
+          try {
+            // Handle both compressed and uncompressed messages
+            message = event.data instanceof ArrayBuffer 
+              ? await decompressMessage(event.data)
+              : JSON.parse(event.data);
+          } catch (err) {
+            console.error('Error parsing message:', err);
+            return;
+          }
 
           switch (message.type) {
             case 'init':
-              clientId = message.clientId; // Set the clientId when the init message is received
-              if (!clientId) {
-                console.error('clientId is undefined in init message:', message);
-              }
+              clientId = message.clientId;
               break;
-
             case 'update':
               applyRemoteChanges(message.changes);
               break;
-
             case 'cursor':
               if (message.clientId !== clientId) {
-                if (!message.clientId) {
-                  console.error('clientId is undefined in cursor message:', message);
-                } else {
-                  updateRemoteCursor(message.clientId, message.cursorPos);
-                }
+                updateRemoteCursor(message.clientId, message.cursorPos);
               }
               break;
-
             case 'user-left':
               removeCursorIndicator(message.clientId);
               break;
-
-            default:
-              console.error('Unknown message type:', message.type);
           }
         };
     
@@ -777,48 +823,48 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
     
       // File upload handler
       fileUpload.addEventListener('change', async function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+        const file = e.target.files[0];
+        if (!file) return;
 
-  uploadStatus.textContent = 'Uploading...';
-  uploadStatus.style.color = '#666';
+        uploadStatus.textContent = 'Uploading...';
+        uploadStatus.style.color = '#666';
 
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
 
-    const response = await fetch(`/upload/${currentProjectId}`, {
-      method: 'POST',
-      body: formData
-    });
+          const response = await fetch(`/upload/${currentProjectId}`, {
+            method: 'POST',
+            body: formData
+          });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Upload failed');
-    }
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Upload failed');
+          }
 
-    const result = await response.json();
-    uploadStatus.textContent = 'Uploaded!';
-    uploadStatus.style.color = 'green';
-    
-    // Add to sidebar
-    addAssetToSidebar(result.url, file.name);
-    
-    if (file.type.startsWith('image/')) {
-      editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
-    } else {
-      editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
-    }
-  } catch (error) {
-    uploadStatus.textContent = error.message;
-    uploadStatus.style.color = 'red';
-  } finally {
-    setTimeout(() => {
-      uploadStatus.textContent = '';
-    }, 3000);
-    fileUpload.value = '';
-  }
-});
+          const result = await response.json();
+          uploadStatus.textContent = 'Uploaded!';
+          uploadStatus.style.color = 'green';
+          
+          // Add to sidebar
+          addAssetToSidebar(result.url, file.name);
+          
+          if (file.type.startsWith('image/')) {
+            editor.replaceSelection(`\n<img src="${result.url}" alt="${file.name.replace(/"/g, '&quot;')}">\n`);
+          } else {
+            editor.replaceSelection(`\n<a href="${result.url}" download>${file.name}</a>\n`);
+          }
+        } catch (error) {
+          uploadStatus.textContent = error.message;
+          uploadStatus.style.color = 'red';
+        } finally {
+          setTimeout(() => {
+            uploadStatus.textContent = '';
+          }, 3000);
+          fileUpload.value = '';
+        }
+      });
     
       // Sidebar functionality
       const sidebar = document.getElementById('assets-sidebar');
@@ -836,30 +882,30 @@ index.html?id=w26k1v - Starts in both views mode (default), where 'w26k1v' is th
 
       // Function to add asset to sidebar
       function addAssetToSidebar(url, filename) {
-  const listItem = document.createElement('li');
-  const isImage = filename.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+        const listItem = document.createElement('li');
+        const isImage = filename.match(/\.(jpg|jpeg|png|gif|webp)$/i);
 
-  listItem.style.display = 'flex';
-  listItem.style.alignItems = 'center';
-  listItem.style.marginBottom = '10px';
-  listItem.style.position = 'relative';
-  listItem.style.left = '-40px';
-  
-  listItem.innerHTML = `
-    <div style="flex-shrink: 0; margin-right: 10px;">
-      ${isImage ? `<img src="${url}" alt="${filename}" style="width: 40px; height: 40px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px;">` : ''}
-    </div>
-    <div style="flex-grow: 1;">
-      <span style="font-size: 14px; color: #333;">${filename}</span>
-    </div>
-    <div style="flex-shrink: 0; display: flex; gap: 5px;">
-      <button title="Copy URL" onclick="copyToClipboard('${url}')" style="padding: 5px; border: none; background: #4CAF50; color: white; border-radius: 4px; cursor: pointer;">⎘</button>
-      <button title="Delete" onclick="deleteAsset(this, '${url}')" style="padding: 5px; border: none; background: #f44336; color: white; border-radius: 4px; cursor: pointer;">✕</button>
-    </div>
-  `;
+        listItem.style.display = 'flex';
+        listItem.style.alignItems = 'center';
+        listItem.style.marginBottom = '10px';
+        listItem.style.position = 'relative';
+        listItem.style.left = '-40px';
+        
+        listItem.innerHTML = `
+          <div style="flex-shrink: 0; margin-right: 10px;">
+            ${isImage ? `<img src="${url}" alt="${filename}" style="width: 40px; height: 40px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px;">` : ''}
+          </div>
+          <div style="flex-grow: 1;">
+            <span style="font-size: 14px; color: #333;">${filename}</span>
+          </div>
+          <div style="flex-shrink: 0; display: flex; gap: 5px;">
+            <button title="Copy URL" onclick="copyToClipboard('${url}')" style="padding: 5px; border: none; background: #4CAF50; color: white; border-radius: 4px; cursor: pointer;">⎘</button>
+            <button title="Delete" onclick="deleteAsset(this, '${url}')" style="padding: 5px; border: none; background: #f44336; color: white; border-radius: 4px; cursor: pointer;">✕</button>
+          </div>
+        `;
 
-  document.getElementById('assets-list').appendChild(listItem);
-}
+        document.getElementById('assets-list').appendChild(listItem);
+      }
 
 
 

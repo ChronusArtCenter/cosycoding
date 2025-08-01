@@ -34,6 +34,7 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 // Configure allowed file types
 const allowedMimeTypes = {
   'image/jpeg': 'jpg',
+  'image/jpeg': 'jpeg',
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
@@ -42,7 +43,8 @@ const allowedMimeTypes = {
   'application/octet-stream': 'glb',
   'model/gltf+json': 'gltf',
   'text/plain': 'txt',
-  'text/csv': 'csv'
+  'text/csv': 'csv',
+  'text/javascript.js': 'js' 
 };
 
 // File upload configuration
